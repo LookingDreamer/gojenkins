@@ -468,6 +468,57 @@ func (j *Job) InvokeSimple(ctx context.Context, params map[string]string) (int64
 	return number, nil
 }
 
+func (j *Job) InvokeSimpleRepeat(ctx context.Context, params map[string]string) (int64, error) {
+	// isQueued, err := j.IsQueued(ctx)
+	// if err != nil {
+	// 	return 0, err
+	// }
+	// if isQueued {
+	// 	fmt.Printf("%s is already running,but still run", j.GetName())
+	// 	// Error.Printf("%s is already running", j.GetName())
+	// 	// return 0, nil
+	// }
+
+
+	endpoint := "/build"
+	parameters, err := j.GetParameters(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if len(parameters) > 0 {
+		endpoint = "/buildWithParameters"
+	}
+	data := url.Values{}
+	for k, v := range params {
+		data.Set(k, v)
+	}
+	resp, err := j.Jenkins.Requester.Post(ctx, j.Base+endpoint, bytes.NewBufferString(data.Encode()), nil, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+		return 0, fmt.Errorf("Could not invoke job %q: %s", j.GetName(), resp.Status)
+	}
+
+	location := resp.Header.Get("Location")
+	if location == "" {
+		return 0, errors.New("Don't have key \"Location\" in response of header")
+	}
+
+	u, err := url.Parse(location)
+	if err != nil {
+		return 0, err
+	}
+
+	number, err := strconv.ParseInt(path.Base(u.Path), 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return number, nil
+}
+
 func (j *Job) Invoke(ctx context.Context, files []string, skipIfRunning bool, params map[string]string, cause string, securityToken string) (bool, error) {
 	isQueued, err := j.IsQueued(ctx)
 	if err != nil {
